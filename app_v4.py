@@ -15,12 +15,20 @@ BASE_URL = "https://v3.football.api-sports.io/fixtures"
 HEADERS = {"x-apisports-key": API_KEY}
 
 LEAGUES = [
-    ("Premier League", 39),
-    ("La Liga", 140),
-    ("Serie A", 135),
-    ("Bundesliga", 78),
+    ("Premier League (England)", 39),
     ("Super League Greece", 197),
+    ("La Liga (Spain)", 140),
+    ("Serie A (Italy)", 135),
+    ("Challenger Pro League (Belgium - B Division)", 145),
+    ("Pro League (Belgium - A Division)", 144),
+    ("Super Lig (Turkey)", 203),
+    ("Eredivisie (Netherlands)", 88),
+    ("Primeira Liga (Portugal)", 94),
+    ("Ligue 1 (France)", 61),
+    ("Bundesliga (Germany)", 78),
+    ("Super League 2 (Greece - B Division)", 494)
 ]
+
 
 SEASONS = ["2025", "2024", "2023", "2022"]
 
