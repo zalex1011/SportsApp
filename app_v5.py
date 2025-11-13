@@ -123,19 +123,19 @@ def get_current_season(league_id, demo=True):
 
 
 # =============== LOAD MODELS FROM BASE64 TXT ===============
+import pickle
+
 @st.cache_resource
 def load_models():
-    try:
-        with open("models/model_result_real.txt", "r") as f:
-            result_bytes = base64.b64decode(f.read())
-        with open("models/model_over_real.txt", "r") as f:
-            over_bytes = base64.b64decode(f.read())
-    except FileNotFoundError as e:
-        st.error("❌ Λείπουν τα base64 αρχεία μοντέλων στο `models/` (model_result_real.txt, model_over_real.txt).")
-        raise e
-    model_result = pickle.load(io.BytesIO(result_bytes))  # multi-class: [Home, Draw, Away]
-    model_over = pickle.load(io.BytesIO(over_bytes))      # binary: [Under, Over]
+    """Φορτώνει τα πραγματικά RandomForest μοντέλα από τα .pkl αρχεία."""
+    with open("models/model_result_real.pkl", "rb") as f:
+        model_result = pickle.load(f)
+
+    with open("models/model_over_real.pkl", "rb") as f:
+        model_over = pickle.load(f)
+
     return model_result, model_over
+
 
 model_result, model_over = load_models()
 
