@@ -107,34 +107,18 @@ DEMO_MATCHES_PER_RUN = 12  # όπως ζήτησες (option 2B)
 
 # =============== LOAD MODELS (IF AVAILABLE) ===============
 @st.cache_resource
-def load_models_if_exist():
-    """
-    Προσπαθεί να φορτώσει τα πραγματικά μοντέλα.
-    Αν δεν τα βρει, γυρίζει (None, None) και πάμε σε πλήρως demo mode.
-    """
-    model_result = None
-    model_over = None
-    try:
-        with open("models/model_result_real.txt", "r") as f:
-            result_bytes = base64.b64decode(f.read())
-        model_result = pickle.load(io.BytesIO(result_bytes))
-    except Exception:
-        model_result = None
+def load_models():
+    """Φορτώνει τα δύο πραγματικά .pkl μοντέλα από το φάκελο models/"""
+    import pickle
 
-    try:
-        with open("models/model_over_real.txt", "r") as f:
-            over_bytes = base64.b64decode(f.read())
-        model_over = pickle.load(io.BytesIO(over_bytes))
-    except Exception:
-        model_over = None
+    with open("models/model_result_real.pkl", "rb") as f:
+        model_result = pickle.load(f)
+
+    with open("models/model_over_real.pkl", "rb") as f:
+        model_over = pickle.load(f)
 
     return model_result, model_over
 
-model_result, model_over = load_models_if_exist()
-
-if model_result is None or model_over is None:
-    st.warning("💡 Demo Mode: Δεν βρέθηκαν τα μοντέλα στο `models/`. "
-               "Χρησιμοποιούνται demo πιθανότητες (τυχαίες αλλά ρεαλιστικές).")
 
 # =============== HELPERS ===============
 
