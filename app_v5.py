@@ -96,18 +96,31 @@ LEAGUES = [
 ]
 SEASONS = ["2025", "2024", "2023", "2022"]
 @st.cache_data
-def get_current_season(league_id: int):
-    url = "https://v3.football.api-sports.io/leagues"
+# ==========================================
+#  CURRENT SEASON FIX  (FREE PLAN SAFE MODE)
+# ==========================================
+def get_current_season(league_id, demo=True):
+    """
+    Αν demo=True → δεν ζητάμε season από API (free plan limitation).
+    Επιστρέφουμε την πιο πρόσφατη διαθέσιμη σεζόν για training/predictions.
+    """
+    if demo:
+        return 2022   # <-- άλλαξε αν θέλεις άλλη default season
+
+    # REAL API mode (με paid plan)
+    url = f"{BASE_URL}/leagues"
     params = {"league": league_id}
-    r = requests.get(url, headers=HEADERS, params=params, timeout=30)
-    data = r.json()
+    data = api_get(url, params)
+
+    if not data["response"]:
+        return 2022
+
     seasons = data["response"][0]["seasons"]
+    if not seasons:
+        return 2022
 
-    for s in seasons:
-        if s["current"] == True:
-            return s["year"]  # example: 2025
+    return seasons[-1]["year"]
 
-    return seasons[-1]["year"]  # fallback
 
 # =============== LOAD MODELS FROM BASE64 TXT ===============
 @st.cache_resource
@@ -128,7 +141,7 @@ model_result, model_over = load_models()
 
 # =============== HELPERS ===============
 def fetch_fixtures(league_id: int, season: int, days_ahead: int):
-    current_season = get_current_season(league_id)
+    current_season = get_current_season(league_id, demo=True)
 
     # === CASE 1: ΤΡΕΧΟΥΣΑ ΣΕΖΟΝ ===
     if season == current_season:
