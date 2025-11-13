@@ -95,6 +95,19 @@ LEAGUES = [
     ("Super League 2 (Greece - B Division)", 494)
 ]
 SEASONS = ["2025", "2024", "2023", "2022"]
+@st.cache_data
+def get_current_season(league_id: int):
+    url = "https://v3.football.api-sports.io/leagues"
+    params = {"league": league_id}
+    r = requests.get(url, headers=HEADERS, params=params, timeout=30)
+    data = r.json()
+    seasons = data["response"][0]["seasons"]
+
+    for s in seasons:
+        if s["current"] == True:
+            return s["year"]  # example: 2025
+
+    return seasons[-1]["year"]  # fallback
 
 # =============== LOAD MODELS FROM BASE64 TXT ===============
 @st.cache_resource
@@ -114,13 +127,41 @@ def load_models():
 model_result, model_over = load_models()
 
 # =============== HELPERS ===============
-def fetch_fixtures(league_id: int, season: str, days_ahead: int):
-    today = datetime.utcnow().date()
-    future_date = today + timedelta(days=days_ahead)
-    params = {"league": league_id, "season": season, "from": str(today), "to": str(future_date)}
-    r = requests.get(BASE_URL, headers=HEADERS, params=params, timeout=30)
-    data = r.json()
-    return data.get("response", [])
+def fetch_fixtures(league_id: int, season: int, days_ahead: int):
+    current_season = get_current_season(league_id)
+
+    # === CASE 1: ΤΡΕΧΟΥΣΑ ΣΕΖΟΝ ===
+    if season == current_season:
+        today = datetime.utcnow().date()
+        future = today + timedelta(days=days_ahead)
+
+        params = {
+            "league": league_id,
+            "season": season,
+            "from": str(today),
+            "to": str(future)
+        }
+        r = requests.get(BASE_URL, headers=HEADERS, params=params, timeout=30)
+        return r.json().get("response", [])
+
+    # === CASE 2: ΠΑΛΙΑ ΣΕΖΟΝ ===
+    elif season < current_season:
+        start_date = f"{season}-08-01"
+        end_date = f"{season+1}-06-30"
+
+        params = {
+            "league": league_id,
+            "season": season,
+            "from": start_date,
+            "to": end_date
+        }
+        r = requests.get(BASE_URL, headers=HEADERS, params=params, timeout=30)
+        return r.json().get("response", [])
+
+    # === CASE 3: ΜΕΛΛΟΝΤΙΚΗ ΣΕΖΟΝ ===
+    else:
+        st.warning("⚠️ Η σεζόν αυτή δεν έχει ξεκινήσει ακόμη.")
+        return []
 
 def color_for_prob(pct: float) -> str:
     if pct >= 70: return "#22c55e"  # green
