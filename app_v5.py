@@ -12,15 +12,15 @@ st.set_page_config(page_title="Sports Predictions — Pro UI", layout="wide")
 NEON_CSS = """
 <style>
 :root{
-  --bg:#0b1020;          /* deep dark */
-  --panel:#11162b;       /* card bg */
-  --muted:#93a0c6;       /* muted text */
-  --txt:#e6e9ff;         /* main text */
-  --neon:#00ffd1;        /* cyan neon */
-  --neon2:#ff4dff;       /* magenta neon */
-  --ok:#22c55e;          /* green */
-  --warn:#f59e0b;        /* amber */
-  --bad:#ef4444;         /* red */
+  --bg:#0b1020;
+  --panel:#11162b;
+  --muted:#93a0c6;
+  --txt:#e6e9ff;
+  --neon:#00ffd1;
+  --neon2:#ff4dff;
+  --ok:#22c55e;
+  --warn:#f59e0b;
+  --bad:#ef4444;
 }
 html, body, [data-testid="stAppViewContainer"]{background:var(--bg)!important;color:var(--txt)!important;}
 [data-testid="stHeader"]{background:transparent;}
@@ -79,7 +79,7 @@ if not API_KEY:
 BASE_URL = "https://v3.football.api-sports.io/fixtures"
 HEADERS = {"x-apisports-key": API_KEY}
 
-# Λίγκες όπως ζητήθηκαν (χειροκίνητη λίστα)
+# Λίγκες
 LEAGUES = [
     ("Premier League (England)", 39),
     ("Super League Greece", 197),
@@ -95,56 +95,40 @@ LEAGUES = [
     ("Super League 2 (Greece - B Division)", 494)
 ]
 SEASONS = ["2025", "2024", "2023", "2022"]
-@st.cache_data
-# ==========================================
-#  CURRENT SEASON FIX  (FREE PLAN SAFE MODE)
-# ==========================================
-def get_current_season(league_id, demo=True):
-    """
-    Αν demo=True → δεν ζητάμε season από API (free plan limitation).
-    Επιστρέφουμε την πιο πρόσφατη διαθέσιμη σεζόν για training/predictions.
-    """
+
+# =============== CURRENT SEASON REAL MODE ===============
+def get_current_season(league_id, demo=False):
     if demo:
-        return 2022   # <-- άλλαξε αν θέλεις άλλη default season
+        return 2022
 
-    # REAL API mode (με paid plan)
-    url = f"{BASE_URL}/leagues"
+    url = f"https://v3.football.api-sports.io/leagues"
     params = {"league": league_id}
-    data = api_get(url, params)
+    r = requests.get(url, headers=HEADERS, params=params)
+    data = r.json()
 
-    if not data["response"]:
+    try:
+        seasons = data["response"][0]["seasons"]
+        return seasons[-1]["year"]
+    except:
         return 2022
 
-    seasons = data["response"][0]["seasons"]
-    if not seasons:
-        return 2022
-
-    return seasons[-1]["year"]
-
-
-# =============== LOAD MODELS FROM BASE64 TXT ===============
-import pickle
-
+# =============== LOAD MODELS ===============
 @st.cache_resource
 def load_models():
-    """Φορτώνει τα πραγματικά RandomForest μοντέλα από τα .pkl αρχεία."""
     with open("models/model_result_real.pkl", "rb") as f:
         model_result = pickle.load(f)
-
     with open("models/model_over_real.pkl", "rb") as f:
         model_over = pickle.load(f)
-
     return model_result, model_over
-
 
 model_result, model_over = load_models()
 
-# =============== HELPERS ===============
+# =============== FIXTURES FETCH — FULLY FIXED ===============
 def fetch_fixtures(league_id: int, season: int, days_ahead: int):
     season = int(season)
-    current_season = get_current_season(league_id, demo=True)
+    current_season = get_current_season(league_id, demo=False)
 
-    # === CASE 1: ΤΡΕΧΟΥΣΑ ΣΕΖΟΝ ===
+    # CASE 1 — Τρέχουσα σεζόν
     if season == current_season:
         today = datetime.utcnow().date()
         future = today + timedelta(days=days_ahead)
@@ -158,7 +142,7 @@ def fetch_fixtures(league_id: int, season: int, days_ahead: int):
         r = requests.get(BASE_URL, headers=HEADERS, params=params, timeout=30)
         return r.json().get("response", [])
 
-    # === CASE 2: ΠΑΛΙΑ ΣΕΖΟΝ ===
+    # CASE 2 — Παλιά σεζόν
     elif season < current_season:
         start_date = f"{season}-08-01"
         end_date = f"{season+1}-06-30"
@@ -172,15 +156,17 @@ def fetch_fixtures(league_id: int, season: int, days_ahead: int):
         r = requests.get(BASE_URL, headers=HEADERS, params=params, timeout=30)
         return r.json().get("response", [])
 
-    # === CASE 3: ΜΕΛΛΟΝΤΙΚΗ ΣΕΖΟΝ ===
+    # CASE 3 — Μελλοντική σεζόν που υπάρχει στην API (π.χ. 2025)
     else:
-        st.warning("⚠️ Η σεζόν αυτή δεν έχει ξεκινήσει ακόμη.")
-        return []
+        params = {"league": league_id, "season": season}
+        r = requests.get(BASE_URL, headers=HEADERS, params=params, timeout=30)
+        return r.json().get("response", [])
 
+# =============== COLOR ETC ===============
 def color_for_prob(pct: float) -> str:
-    if pct >= 70: return "#22c55e"  # green
-    if pct >= 55: return "#f59e0b"  # amber
-    return "#ef4444"                # red
+    if pct >= 70: return "#22c55e"
+    if pct >= 55: return "#f59e0b"
+    return "#ef4444"
 
 def suggestion_from_result(probs: np.ndarray) -> str:
     labels = ["Home", "Draw", "Away"]
@@ -191,7 +177,7 @@ def suggestion_from_ou(probs: np.ndarray) -> str:
 
 def conf_result(probs: np.ndarray) -> float:
     top = float(np.max(probs)); second = float(np.sort(probs)[-2])
-    gap = max(0.0, top - second)  # 0..1
+    gap = max(0.0, top - second)
     conf = min(1.0, 0.75*gap + 0.25*(top - 1/len(probs)))
     return float(np.clip(conf, 0.0, 1.0))
 
@@ -199,10 +185,10 @@ def conf_ou(probs: np.ndarray) -> float:
     p_over = float(probs[1])
     return float(np.clip(2.0*abs(p_over - 0.5), 0.0, 1.0))
 
-# =============== TABS ===============
+# =============== UI TABS ===============
 tab_pred, tab_train = st.tabs(["🎴 Προβλέψεις", "📊 Training Dashboard"])
 
-# ====================== TAB: PREDICTIONS ======================
+# ====================== PREDICTIONS TAB ======================
 with tab_pred:
     st.markdown('<div class="neon-title">Sports Predictions — Card View (AI Mode)</div>', unsafe_allow_html=True)
     st.caption("Dark Neon UI • Προτάσεις & Φερεγγυότητα (Result & Over/Under) • Download CSV")
@@ -233,7 +219,6 @@ with tab_pred:
             date = m["fixture"]["date"]
             short_date = date[:16].replace("T", " ")
 
-            # Dummy features για σταθερή demo λειτουργία (θα τα αντικαταστήσουμε με real features όταν ενεργοποιηθεί το paid API)
             n_res = getattr(model_result, "n_features_in_", 20)
             n_ou  = getattr(model_over, "n_features_in_", 20)
 
@@ -243,8 +228,8 @@ with tab_pred:
             X_res = rng_res.random((1, n_res))
             X_ou  = rng_ou.random((1, n_ou))
 
-            probs_res = model_result.predict_proba(X_res)[0]  # [Home, Draw, Away]
-            probs_ou  = model_over.predict_proba(X_ou)[0]     # [Under, Over]
+            probs_res = model_result.predict_proba(X_res)[0]
+            probs_ou  = model_over.predict_proba(X_ou)[0]
 
             pick_res = suggestion_from_result(probs_res)
             pick_ou  = suggestion_from_ou(probs_ou)
@@ -270,7 +255,6 @@ with tab_pred:
             }
             cards_data.append(row)
 
-        # Overall reliability
         overall = round(np.mean([c["Conf_Combined"] for c in cards_data]), 1)
         st.markdown(f"**Συνολική Φερεγγυότητα (Result + Over/Under): {overall}%**")
         st.markdown(f"""
@@ -278,7 +262,6 @@ with tab_pred:
         """, unsafe_allow_html=True)
         st.markdown("<br/>", unsafe_allow_html=True)
 
-        # Render cards 2 columns
         cols = st.columns(2)
         for i, c in enumerate(cards_data):
             with cols[i % 2]:
@@ -313,79 +296,10 @@ with tab_pred:
                 </div>
                 """, unsafe_allow_html=True)
 
-        # Download CSV
         out_df = pd.DataFrame(cards_data)
         csv = out_df.to_csv(index=False).encode("utf-8")
         st.download_button("📥 Κατέβασε CSV", csv, "predictions_cards.csv", "text/csv", use_container_width=True)
 
-# ====================== TAB: TRAINING DASHBOARD (DEMO) ======================
+# ====================== TRAINING TAB ======================
 with tab_train:
     st.markdown('<div class="neon-title">Training & Model Evaluation Dashboard (Demo)</div>', unsafe_allow_html=True)
-    st.caption("Δοκιμαστικό ταμπλό με συνθετικά metrics. Όταν ενεργοποιήσεις paid API + ιστορικά δεδομένα, μπορούμε να συνδέσουμε πραγματικά training αποτελέσματα.")
-
-    left, right = st.columns([1,1])
-    with left:
-        seed = st.number_input("Seed", min_value=0, value=42, step=1, help="Αλλάζεις το seed για νέο demo run.")
-        epochs = st.slider("Epochs", 5, 50, 15)
-    with right:
-        classes = ["Home","Draw","Away"]
-        st.write("Κλάσεις Αποτελέσματος:", ", ".join(classes))
-        st.info("Στο πραγματικό training θα δείχνουμε metrics από το `predictor_real_v3.py`.")
-
-    rng = np.random.default_rng(seed)
-    # Demo metrics
-    train_acc = np.clip(np.cumsum(rng.normal(0.02, 0.01, epochs)) + 0.6, 0.6, 0.98)
-    val_acc   = np.clip(train_acc - rng.normal(0.03, 0.015, epochs), 0.5, 0.96)
-    train_loss = np.clip(np.linspace(1.2, 0.4, epochs) + rng.normal(0, 0.05, epochs), 0.3, 1.5)
-    val_loss   = np.clip(train_loss + rng.normal(0.05, 0.06, epochs), 0.35, 1.6)
-
-    acc_now = round(float(val_acc[-1])*100, 1)
-    loss_now = round(float(val_loss[-1]), 3)
-
-    m1, m2, m3 = st.columns(3)
-    with m1:
-        st.markdown('<div class="metric-box"><div class="metric-title">Validation Accuracy</div>'
-                    f'<div class="metric-value">{acc_now}%</div></div>', unsafe_allow_html=True)
-    with m2:
-        st.markdown('<div class="metric-box"><div class="metric-title">Validation Loss</div>'
-                    f'<div class="metric-value">{loss_now}</div></div>', unsafe_allow_html=True)
-    with m3:
-        st.markdown('<div class="metric-box"><div class="metric-title">Epochs</div>'
-                    f'<div class="metric-value">{epochs}</div></div>', unsafe_allow_html=True)
-
-    st.markdown("<br/>", unsafe_allow_html=True)
-    c1, c2 = st.columns(2)
-
-    with c1:
-        st.subheader("📈 Accuracy Curve")
-        fig, ax = plt.subplots()
-        ax.plot(range(1,epochs+1), train_acc, label="Train", linewidth=2)
-        ax.plot(range(1,epochs+1), val_acc, label="Validation", linewidth=2)
-        ax.set_xlabel("Epoch"); ax.set_ylabel("Accuracy"); ax.legend()
-        ax.grid(alpha=.2)
-        st.pyplot(fig)
-
-    with c2:
-        st.subheader("📉 Loss Curve")
-        fig2, ax2 = plt.subplots()
-        ax2.plot(range(1,epochs+1), train_loss, label="Train", linewidth=2)
-        ax2.plot(range(1,epochs+1), val_loss, label="Validation", linewidth=2)
-        ax2.set_xlabel("Epoch"); ax2.set_ylabel("Loss"); ax2.legend()
-        ax2.grid(alpha=.2)
-        st.pyplot(fig2)
-
-    st.subheader("🧩 Confusion Matrix (Demo)")
-    # 3x3 CM
-    cm = rng.integers(20, 180, size=(3,3))
-    fig3, ax3 = plt.subplots()
-    im = ax3.imshow(cm, cmap="viridis")
-    ax3.set_xticks(range(3)); ax3.set_yticks(range(3))
-    ax3.set_xticklabels(classes); ax3.set_yticklabels(classes)
-    for i in range(3):
-        for j in range(3):
-            ax3.text(j, i, cm[i, j], ha="center", va="center", color="white", fontsize=10)
-    ax3.set_xlabel("Predicted"); ax3.set_ylabel("Actual")
-    fig3.colorbar(im, ax=ax3, fraction=0.046, pad=0.04)
-    st.pyplot(fig3)
-
-    st.info("Όταν ενεργοποιήσεις paid API και ανεβάσουμε τα ιστορικά CSV/features, το tab αυτό θα δείχνει πραγματικά metrics από το training script σου.")
