@@ -141,6 +141,7 @@ model_result, model_over = load_models()
 
 # =============== HELPERS ===============
 def fetch_fixtures(league_id: int, season: int, days_ahead: int):
+    season = int(season)
     current_season = get_current_season(league_id, demo=True)
 
     # === CASE 1: ΤΡΕΧΟΥΣΑ ΣΕΖΟΝ ===
